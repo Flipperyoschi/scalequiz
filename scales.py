@@ -1,7 +1,8 @@
 import random
 import streamlit as st
-from pydub import AudioSegment
-from pydub.playback import play
+import soundfile as sf
+import sounddevice as sd
+
 
 # Define the available scales with corresponding MIDI program numbers
 scales = {
