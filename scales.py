@@ -1,7 +1,7 @@
 import random
 import streamlit as st
-import pygame
-import pygame.midi
+from streamlit import components
+from IPython.display import Audio
 
 # Define the available scales with corresponding MIDI program numbers
 scales = {
@@ -24,9 +24,6 @@ scales = {
         "Altered scale": [0, 1, 3, 4, 6, 8, 10],
     }
 }
-
-# Set the desired MIDI output device name
-output_device_name = "Microsoft MIDI Mapper"
 
 # Global variables
 current_scale_type = None
@@ -63,43 +60,21 @@ def play_scale(scale_type):
     # Generate the scale notes
     scale_notes = get_scale_notes(scale_type)
 
-    # Initialize Pygame MIDI
-    pygame.midi.init()
-
-    # Find the desired output device ID by name
-    device_id = None
-    num_devices = pygame.midi.get_count()
-    for i in range(num_devices):
-        device_info = pygame.midi.get_device_info(i)
-        device_name = device_info[1].decode("utf-8")
-        if device_name == output_device_name:
-            device_id = i
-            break
-
-    if device_id is None:
-        st.error("Output device not found: " + output_device_name)
-        return
-
-    # Open the specified output device
-    output = pygame.midi.Output(device_id)
-
-    # Set the instrument/program
-    output.set_instrument(0)
-
     # Calculate the duration based on the tempo
     duration = int(60000 / current_tempo)
 
     # Play the scale
+    audio_elements = []
     for note in scale_notes:
-        output.note_on(note, velocity=127)
-        pygame.time.wait(duration)
-        output.note_off(note)
+        audio_element = Audio(data=None, url=f"https://path-to-your-audio-files/note_{note}.wav", autoplay=True)
+        audio_elements.append(audio_element)
 
-    # Close the MIDI output device
-    output.close()
+        # Delay between notes
+        st.experimental_rerun()
 
-    # Quit Pygame MIDI
-    pygame.midi.quit()
+    # Display the audio elements
+    for audio_element in audio_elements:
+        components.v1.html(audio_element._repr_html_(), height=0)
 
     # Update the current scale type
     current_scale_type = scale_type
@@ -113,15 +88,14 @@ def repeat_scale():
 
 def check_answer(scale_type):
     if current_scale_type == scale_type:
-        st.success("Correct!")
+        st.write("Correct!")
     else:
-        st.error("Wrong! Try again.")
-        repeat_scale()
+        st.write("Wrong! Try again.")
+        repeat_button.button("Repeat Scale")
 
 
 def play_random_scale():
-    # Clear the answer text
-    st.empty()
+    st.empty()  # Clear the answer text
 
     scale_type = get_random_scale()
     if scale_type:
@@ -130,17 +104,16 @@ def play_random_scale():
         for button in scale_buttons.values():
             button.button(button.label)
 
-        # Schedule clearing the answer text after 3 seconds
-        st.empty()
+        st.experimental_rerun()
     else:
-        st.warning("No scales selected.")
+        st.write("No scales selected.")
 
 
 # Create the "Play Random Scale" button
-play_button = st.button("Play Random Scale", on_click=play_random_scale)
+play_button = st.button("Play Random Scale", key="play_button")
 
 # Create the "Repeat Scale" button
-repeat_button = st.button("Repeat Scale", on_click=repeat_scale, state="disabled")
+repeat_button = st.empty()
 
 # Create the scale groups
 checkbox_values = {}
@@ -148,18 +121,18 @@ scale_buttons = {}
 
 for scale_group, scales_dict in scales.items():
     st.subheader(scale_group)
+
     for scale_type in scales_dict.keys():
-        checkbox_values[(scale_group, scale_type)] = st.checkbox(scale_type)
-        button = st.button(scale_type, on_click=lambda st=(scale_group, scale_type): check_answer(st))
+        checkbox_value = st.checkbox(scale_type, value=False)
+        checkbox_values[(scale_group, scale_type)] = checkbox_value
+
+        button = st.empty()
         scale_buttons[(scale_group, scale_type)] = button
 
-# Create the feedback section
-st.subheader("Feedback")
-feedback_text = st.empty()
-
-# Create the tempo slider
-current_tempo = st.slider("Tempo", min_value=100, max_value=400, value=current_tempo)
-
-# Start the Streamlit app
-if __name__ == "__main__":
+# Handle button clicks
+if play_button:
     play_random_scale()
+
+for (scale_group, scale_type), button in scale_buttons.items():
+    if button.button_clicked():
+        check_answer((scale_group, scale_type))
