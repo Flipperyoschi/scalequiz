@@ -1,7 +1,7 @@
 import random
 import streamlit as st
-from streamlit import components
-from IPython.display import Audio
+from pydub import AudioSegment
+from pydub.playback import play
 
 # Define the available scales with corresponding MIDI program numbers
 scales = {
@@ -64,17 +64,11 @@ def play_scale(scale_type):
     duration = int(60000 / current_tempo)
 
     # Play the scale
-    audio_elements = []
     for note in scale_notes:
-        audio_element = Audio(data=None, url=f"https://path-to-your-audio-files/note_{note}.wav", autoplay=True)
-        audio_elements.append(audio_element)
-
-        # Delay between notes
+        audio_file = f"note_{note}.wav"
+        audio_segment = AudioSegment.from_file(audio_file)
+        play(audio_segment)
         st.experimental_rerun()
-
-    # Display the audio elements
-    for audio_element in audio_elements:
-        components.v1.html(audio_element._repr_html_(), height=0)
 
     # Update the current scale type
     current_scale_type = scale_type
