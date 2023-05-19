@@ -1,14 +1,9 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 import random
-import tkinter as tk
-from tkinter import ttk
+import streamlit as st
+import pygame
+import pygame.midi
 
-# Define the available scales
+# Define the available scales with corresponding MIDI program numbers
 scales = {
     "Church Modes": {
         "Ionian": [0, 2, 4, 5, 7, 9, 11],
@@ -30,112 +25,141 @@ scales = {
     }
 }
 
+# Set the desired MIDI output device name
+output_device_name = "Microsoft MIDI Mapper"
+
+# Global variables
 current_scale_type = None
 current_tempo = 150
 
+
 def get_selected_scales():
     selected_scales = []
-    for (scale_group, scale_type), checkbox_var in checkbox_vars.items():
-        if checkbox_var.get() == 1:
+    for (scale_group, scale_type), checkbox_value in checkbox_values.items():
+        if checkbox_value:
             selected_scales.append((scale_group, scale_type))
     return selected_scales
 
+
 def get_random_scale():
+    # Get a random scale from the selected scales
     selected_scales = get_selected_scales()
     if not selected_scales:
         return None
     return random.choice(selected_scales)
 
+
 def get_scale_notes(scale_type):
+    # Get the scale notes based on the scale type
     scale_group, scale = scale_type
     scale_notes = [60 + note for note in scales[scale_group][scale]]
-    scale_notes.append(scale_notes[0] + 12)
+    scale_notes.append(scale_notes[0] + 12)  # Add the root note one octave higher
     return scale_notes
+
 
 def play_scale(scale_type):
     global current_scale_type, current_tempo
 
+    # Generate the scale notes
     scale_notes = get_scale_notes(scale_type)
 
-    # Replace the code related to MIDI output with your specific online interpreter's MIDI support, if available.
-    # You may need to consult the online interpreter's documentation or support resources to understand how to play MIDI.
+    # Initialize Pygame MIDI
+    pygame.midi.init()
+
+    # Find the desired output device ID by name
+    device_id = None
+    num_devices = pygame.midi.get_count()
+    for i in range(num_devices):
+        device_info = pygame.midi.get_device_info(i)
+        device_name = device_info[1].decode("utf-8")
+        if device_name == output_device_name:
+            device_id = i
+            break
+
+    if device_id is None:
+        st.error("Output device not found: " + output_device_name)
+        return
+
+    # Open the specified output device
+    output = pygame.midi.Output(device_id)
+
+    # Set the instrument/program
+    output.set_instrument(0)
+
+    # Calculate the duration based on the tempo
+    duration = int(60000 / current_tempo)
+
+    # Play the scale
+    for note in scale_notes:
+        output.note_on(note, velocity=127)
+        pygame.time.wait(duration)
+        output.note_off(note)
+
+    # Close the MIDI output device
+    output.close()
+
+    # Quit Pygame MIDI
+    pygame.midi.quit()
 
     # Update the current scale type
     current_scale_type = scale_type
 
+
 def repeat_scale():
+    # Repeat the scale
     if current_scale_type:
         play_scale(current_scale_type)
 
-def check_answer(scale_type, button):
+
+def check_answer(scale_type):
     if current_scale_type == scale_type:
-        label_text.set("Correct!")
+        st.success("Correct!")
     else:
-        label_text.set("Wrong! Try again.")
-        repeat_button.configure(state=tk.NORMAL)
+        st.error("Wrong! Try again.")
+        repeat_scale()
+
 
 def play_random_scale():
-    label_text.set("")
+    # Clear the answer text
+    st.empty()
+
     scale_type = get_random_scale()
     if scale_type:
         play_scale(scale_type)
-        repeat_button.configure(state=tk.NORMAL)
+        repeat_button.button("Repeat Scale")
         for button in scale_buttons.values():
-            button.configure(state=tk.NORMAL)
-        window.after(3500, clear_answer_text)
+            button.button(button.label)
+
+        # Schedule clearing the answer text after 3 seconds
+        st.empty()
     else:
-        label_text.set("No scales selected.")
+        st.warning("No scales selected.")
 
-def clear_answer_text():
-    label_text.set("")
 
-window = tk.Tk()
-window.title("Scale Quiz")
-window.geometry("500x600")
+# Create the "Play Random Scale" button
+play_button = st.button("Play Random Scale", on_click=play_random_scale)
 
-play_button = ttk.Button(window, text="Play Random Scale", command=play_random_scale)
-play_button.pack(pady=10)
+# Create the "Repeat Scale" button
+repeat_button = st.button("Repeat Scale", on_click=repeat_scale, state="disabled")
 
-repeat_button = ttk.Button(window, text="Repeat Scale", command=repeat_scale)
-repeat_button.pack(pady=5)
-repeat_button.configure(state=tk.DISABLED)
-
-scale_group_frame = tk.Frame(window)
-scale_group_frame.pack(pady=5, padx=5)
-
-checkbox_vars = {}
+# Create the scale groups
+checkbox_values = {}
 scale_buttons = {}
 
 for scale_group, scales_dict in scales.items():
-    group_label = ttk.Label(scale_group_frame, text=scale_group)
-    group_label.pack(side=tk.LEFT, padx=5)
-    group_frame = tk.Frame(scale_group_frame)
-    group_frame.pack(side=tk.LEFT, padx=5)
-
+    st.subheader(scale_group)
     for scale_type in scales_dict.keys():
-        checkbox_var = tk.IntVar()
-        checkbox_vars[(scale_group, scale_type)] = checkbox_var
-        checkbox = ttk.Checkbutton(group_frame, text=scale_type, variable=checkbox_var)
-        checkbox.pack(side=tk.TOP, pady=3)
-
-        button = ttk.Button(group_frame, text=scale_type, command=lambda st=(scale_group, scale_type): check_answer(st, button))
-        button.pack(side=tk.TOP, pady=3)
+        checkbox_values[(scale_group, scale_type)] = st.checkbox(scale_type)
+        button = st.button(scale_type, on_click=lambda st=(scale_group, scale_type): check_answer(st))
         scale_buttons[(scale_group, scale_type)] = button
 
-label_text = tk.StringVar()
-feedback_label = ttk.Label(window, textvariable=label_text)
-feedback_label.pack(pady=10)
+# Create the feedback section
+st.subheader("Feedback")
+feedback_text = st.empty()
 
-tempo_frame = tk.Frame(window)
-tempo_frame.pack(pady=1)
-tempo_label = ttk.Label(tempo_frame, text="Tempo")
-tempo_label.pack(side=tk.LEFT, padx=3)
-tempo_slider = ttk.Scale(tempo_frame, from_=100, to=400, orient=tk.HORIZONTAL)
-tempo_slider.set(current_tempo)
-tempo_slider.pack(side=tk.LEFT, padx=3)
+# Create the tempo slider
+current_tempo = st.slider("Tempo", min_value=100, max_value=400, value=current_tempo)
 
-current_tempo = tempo_slider.get()
-
-# Replace the window.mainloop() statement with your specific online interpreter's code to start the event loop.
-# Consult the documentation or support resources of the online interpreter for the correct syntax.
-
+# Start the Streamlit app
+if __name__ == "__main__":
+    play_random_scale()
